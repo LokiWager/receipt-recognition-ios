@@ -1,0 +1,29 @@
+# For more information about the Appfile, see:
+#     https://docs.fastlane.tools/advanced/#appfile
+
+# App Identifier (Bundle ID)
+app_identifier("com.receiptscanner.app")
+
+# Apple ID email (uncomment and set your Apple ID)
+# apple_id("your-apple-id@example.com")
+
+# Team ID (uncomment and set your team ID)
+# team_id("XXXXXXXXXX")
+
+# App Store Connect Team ID (if different from Developer Portal)
+# itc_team_id("XXXXXXXXXX")
+
+# For all lanes (can be overridden per lane)
+for_platform :ios do
+  # Development team
+  # team_id("XXXXXXXXXX")
+end
+
+# For TestFlight and App Store Connect
+for_lane :beta do
+  # app_identifier("com.receiptscanner.app")
+end
+
+for_lane :release do
+  # app_identifier("com.receiptscanner.app")
+end

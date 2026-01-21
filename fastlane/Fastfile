@@ -1,0 +1,227 @@
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#
+#     https://docs.fastlane.tools/actions
+#
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
+
+default_platform(:ios)
+
+platform :ios do
+  # =====================
+  # Setup Lanes
+  # =====================
+
+  desc "Sync development certificates and profiles using Match"
+  lane :sync_dev_certs do
+    match(type: "development", readonly: true)
+  end
+
+  desc "Sync App Store certificates and profiles using Match"
+  lane :sync_appstore_certs do
+    match(type: "appstore", readonly: true)
+  end
+
+  desc "Register new devices and regenerate profiles"
+  lane :register_devices_and_sync do
+    register_devices(devices_file: "./fastlane/devices.txt")
+    match(type: "development", force_for_new_devices: true)
+  end
+
+  # =====================
+  # Build Lanes
+  # =====================
+
+  desc "Build the app for testing (Debug)"
+  lane :build_debug do
+    build_app(
+      scheme: "ReceiptScanner",
+      configuration: "Debug",
+      skip_codesigning: true,
+      skip_archive: true,
+      destination: "generic/platform=iOS Simulator"
+    )
+  end
+
+  desc "Build the app for release"
+  lane :build_release do
+    sync_appstore_certs
+    build_app(
+      scheme: "ReceiptScanner",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "ReceiptScanner.ipa"
+    )
+  end
+
+  # =====================
+  # Test Lanes
+  # =====================
+
+  desc "Run unit tests"
+  lane :test do
+    run_tests(
+      scheme: "ReceiptScanner",
+      device: "iPhone 16",
+      clean: true,
+      code_coverage: true,
+      result_bundle: true,
+      output_directory: "./test_output"
+    )
+  end
+
+  desc "Run unit tests only (no UI tests)"
+  lane :unit_tests do
+    run_tests(
+      scheme: "ReceiptScanner",
+      device: "iPhone 16",
+      clean: true,
+      only_testing: ["ReceiptScannerTests"],
+      code_coverage: true
+    )
+  end
+
+  desc "Run UI tests only"
+  lane :ui_tests do
+    run_tests(
+      scheme: "ReceiptScanner",
+      device: "iPhone 16",
+      only_testing: ["ReceiptScannerUITests"]
+    )
+  end
+
+  # =====================
+  # Deploy Lanes
+  # =====================
+
+  desc "Push a new beta build to TestFlight"
+  lane :beta do
+    ensure_git_status_clean
+    increment_build_number(xcodeproj: "ReceiptScanner.xcodeproj")
+
+    sync_appstore_certs
+
+    build_app(
+      scheme: "ReceiptScanner",
+      configuration: "Release",
+      export_method: "app-store"
+    )
+
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      notify_external_testers: false
+    )
+
+    commit_version_bump(
+      xcodeproj: "ReceiptScanner.xcodeproj",
+      message: "Bump build number for TestFlight [skip ci]"
+    )
+
+    push_to_git_remote
+  end
+
+  desc "Push a new release build to the App Store"
+  lane :release do
+    ensure_git_status_clean
+
+    # Increment version
+    increment_version_number(xcodeproj: "ReceiptScanner.xcodeproj")
+    increment_build_number(xcodeproj: "ReceiptScanner.xcodeproj")
+
+    sync_appstore_certs
+
+    build_app(
+      scheme: "ReceiptScanner",
+      configuration: "Release",
+      export_method: "app-store"
+    )
+
+    upload_to_app_store(
+      skip_screenshots: true,
+      skip_metadata: true,
+      submit_for_review: false
+    )
+
+    commit_version_bump(
+      xcodeproj: "ReceiptScanner.xcodeproj",
+      message: "Bump version for App Store release"
+    )
+
+    push_to_git_remote
+  end
+
+  # =====================
+  # CI/CD Lanes
+  # =====================
+
+  desc "CI: Run tests (used by GitHub Actions)"
+  lane :ci_test do
+    run_tests(
+      scheme: "ReceiptScanner",
+      device: "iPhone 16",
+      clean: true,
+      code_coverage: true,
+      output_directory: "./test_output",
+      result_bundle: true
+    )
+  end
+
+  desc "CI: Build and deploy to TestFlight"
+  lane :ci_deploy_testflight do
+    setup_ci
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
+      key_content: ENV["APP_STORE_CONNECT_API_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    match(
+      type: "appstore",
+      readonly: true,
+      api_key: api_key
+    )
+
+    increment_build_number(
+      xcodeproj: "ReceiptScanner.xcodeproj",
+      build_number: ENV["GITHUB_RUN_NUMBER"]
+    )
+
+    build_app(
+      scheme: "ReceiptScanner",
+      configuration: "Release",
+      export_method: "app-store"
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  # =====================
+  # Utility Lanes
+  # =====================
+
+  desc "Clean build artifacts"
+  lane :clean do
+    clear_derived_data
+    sh("rm -rf ../build")
+    sh("rm -rf ../test_output")
+  end
+
+  desc "Generate project using XcodeGen"
+  lane :generate_project do
+    sh("cd .. && xcodegen generate")
+  end
+end
