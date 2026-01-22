@@ -8,12 +8,12 @@ struct ContentView: View {
                     Label("Home", systemImage: "house")
                 }
 
-            Text("Scan")
+            ScanTabView()
                 .tabItem {
                     Label("Scan", systemImage: "camera")
                 }
 
-            Text("Analytics")
+            AnalyticsView()
                 .tabItem {
                     Label("Analytics", systemImage: "chart.bar")
                 }

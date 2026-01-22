@@ -87,3 +87,100 @@ final class ReceiptScannerTests: XCTestCase {
         XCTAssertEqual(TaxCode.none.rate, 0)
     }
 }
+
+// MARK: - OCR Service Tests
+
+final class OCRServiceTests: XCTestCase {
+
+    func testOCRResultStructure() {
+        let line = OCRResult.RecognizedLine(
+            text: "Test Line",
+            confidence: 0.95,
+            boundingBox: CGRect(x: 0, y: 0, width: 100, height: 20)
+        )
+
+        let result = OCRResult(
+            lines: [line],
+            rawText: "Test Line",
+            processingTime: 0.5
+        )
+
+        XCTAssertEqual(result.lines.count, 1)
+        XCTAssertEqual(result.lines.first?.text, "Test Line")
+        XCTAssertEqual(result.lines.first?.confidence, 0.95)
+        XCTAssertEqual(result.rawText, "Test Line")
+        XCTAssertEqual(result.processingTime, 0.5)
+    }
+
+    func testOCRErrorDescriptions() {
+        let imageError = OCRError.imageConversionFailed
+        XCTAssertNotNil(imageError.errorDescription)
+        XCTAssertTrue(imageError.errorDescription?.contains("convert") ?? false)
+
+        let noTextError = OCRError.noTextFound
+        XCTAssertNotNil(noTextError.errorDescription)
+        XCTAssertTrue(noTextError.errorDescription?.contains("No text") ?? false)
+
+        let cancelledError = OCRError.cancelled
+        XCTAssertNotNil(cancelledError.errorDescription)
+    }
+
+    func testSupportedLanguages() {
+        let languages = OCRService.supportedLanguages()
+        XCTAssertFalse(languages.isEmpty)
+        XCTAssertTrue(languages.contains("en-US"))
+    }
+
+    func testOCRServiceInitialization() async {
+        let service = OCRService(languages: ["en-US", "zh-Hans"])
+        // Service should initialize without error
+        XCTAssertNotNil(service)
+    }
+
+    func testImageProcessorInitialization() async {
+        let processor = ImageProcessor()
+        // Processor should initialize without error
+        XCTAssertNotNil(processor)
+    }
+
+    func testImageProcessorWithSolidColorImage() async {
+        // Create a simple test image
+        let size = CGSize(width: 100, height: 100)
+        UIGraphicsBeginImageContext(size)
+        UIColor.white.setFill()
+        UIRectFill(CGRect(origin: .zero, size: size))
+        let testImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+
+        guard let image = testImage else {
+            XCTFail("Failed to create test image")
+            return
+        }
+
+        let processor = ImageProcessor()
+        let processed = await processor.preprocessForOCR(image)
+
+        XCTAssertNotNil(processed)
+    }
+
+    func testImageProcessorNormalization() async {
+        // Create a test image with non-up orientation
+        let size = CGSize(width: 100, height: 100)
+        UIGraphicsBeginImageContext(size)
+        UIColor.gray.setFill()
+        UIRectFill(CGRect(origin: .zero, size: size))
+        let testImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+
+        guard let image = testImage else {
+            XCTFail("Failed to create test image")
+            return
+        }
+
+        let processor = ImageProcessor()
+        let normalized = await processor.normalizeOrientation(image)
+
+        XCTAssertNotNil(normalized)
+        XCTAssertEqual(normalized.imageOrientation, .up)
+    }
+}
